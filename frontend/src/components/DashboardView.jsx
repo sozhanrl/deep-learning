@@ -12,8 +12,10 @@ export default function DashboardView({
   datasetInfo, 
   onGoToIntake, 
   onRetrainDataset, 
+  onResetDataset,
   onBatchPredict,
-  isRetraining 
+  isRetraining,
+  bestModel
 }) {
   const [smoteView, setSmoteView] = useState('after'); // 'before' | 'after'
   const [activeMetricTab, setActiveMetricTab] = useState('recall'); // 'recall', 'accuracy', 'f1', 'roc_auc', 'mcc'
@@ -23,74 +25,52 @@ export default function DashboardView({
 
   const modelCardsConfig = [
     {
-      name: 'ANN (MLP)',
-      stars: '⭐⭐⭐⭐⭐',
-      type: 'Deep Neural Network',
-      highlight: 'Primary DL Architecture',
+      name: 'ANN / MLP (Deep Neural Net)',
+      type: 'Feed-Forward Deep Network',
+      highlight: 'Baseline Tabular DL with BatchNorm & Dropout',
       color: '#6366F1'
     },
     {
-      name: 'XGBoost',
-      stars: '⭐⭐⭐⭐⭐',
-      type: 'Extreme Gradient Boosting',
-      highlight: 'Fast & High Accuracy',
+      name: '1D-CNN (Local Feature Interactions)',
+      type: '1D Convolutional Network',
+      highlight: 'Extracts Local Multi-Feature Contiguous Patterns',
       color: '#8B5CF6'
     },
     {
-      name: 'Gradient Boosting',
-      stars: '⭐⭐⭐⭐⭐',
-      type: 'Ensemble Tree',
-      highlight: 'High Precision & Recall',
+      name: 'TabTransformer (Feature Self-Attention)',
+      type: 'Self-Attention Transformer',
+      highlight: 'Multi-Head Attention Over Feature Embeddings',
       color: '#EC4899'
     },
     {
-      name: 'SVM',
-      stars: '⭐⭐⭐⭐⭐',
-      type: 'Kernel Classifier',
-      highlight: 'Strong Boundary Margin',
+      name: 'Deep Autoencoder (Latent + Anomaly Signal)',
+      type: 'Bottleneck Autoencoder',
+      highlight: 'Latent Compression + Reconstruction Anomaly Signal',
       color: '#3B82F6'
     },
     {
-      name: 'Random Forest',
-      stars: '⭐⭐⭐⭐☆',
-      type: 'Ensemble Forest',
-      highlight: 'Robust Bagging',
+      name: 'Denoising Autoencoder (Robust Invariant Latent)',
+      type: 'Denoising Latent Network',
+      highlight: 'Noise-Invariant Latent Codes with Skip Connections',
       color: '#10B981'
     },
     {
-      name: 'Decision Tree',
-      stars: '⭐⭐⭐☆☆',
-      type: 'Tree Classifier',
-      highlight: 'High Interpretability',
+      name: 'Wide & Deep (Linear + Deep DNN)',
+      type: 'Wide & Deep Hybrid',
+      highlight: 'Linear Memorization + Deep Generalization',
       color: '#F59E0B'
     },
     {
-      name: 'AdaBoost (Fast Learner)',
-      stars: '⭐⭐⭐⭐⭐',
-      type: 'Adaptive Boosting',
-      highlight: 'Ultra-Fast Weighted Learning',
+      name: 'TabNet (Attentive Tabular Learning)',
+      type: 'Sequential Attention Transformer',
+      highlight: 'Sparse Feature Selection via Sequential Attention',
       color: '#06B6D4'
     },
     {
-      name: 'KNN (Lazy/Slow Learner)',
-      stars: '⭐⭐⭐☆☆',
-      type: 'Distance Based',
-      highlight: 'Lazy Learner Baseline',
-      color: '#14B8A6'
-    },
-    {
-      name: 'Naive Bayes (Slow/Lazy Learner)',
-      stars: '⭐⭐⭐☆☆',
-      type: 'Probabilistic Gaussian',
-      highlight: 'Simple Probabilistic Baseline',
-      color: '#84CC16'
-    },
-    {
-      name: 'Logistic Regression (Slow Learner)',
-      stars: '⭐⭐⭐☆☆',
-      type: 'Linear Model',
-      highlight: 'Slow Learning Algorithm',
-      color: '#64748B'
+      name: 'Deep & Cross Network v2 (DCN-V2)',
+      type: 'Cross-Feature Interaction Network',
+      highlight: 'Explicit Feature Crossing + Deep Generalization',
+      color: '#F43F5E'
     }
   ];
 
@@ -107,7 +87,12 @@ export default function DashboardView({
       f1: set?.f1 ? (set.f1 * 100) : 0,
       mcc: set?.mcc ? set.mcc : 0,
       roc_auc: set?.roc_auc ? (set.roc_auc * 100) : 0,
-      stars: info.stars || 4,
+      stars: info.stars_str || (
+        set?.recall >= 0.90 ? '⭐⭐⭐⭐⭐' :
+        set?.recall >= 0.80 ? '⭐⭐⭐⭐☆' :
+        set?.recall >= 0.70 ? '⭐⭐⭐☆☆' :
+        set?.recall >= 0.60 ? '⭐⭐☆☆☆' : '⭐☆☆☆☆'
+      ),
     };
   });
 
@@ -125,11 +110,25 @@ export default function DashboardView({
     if (!file) return;
     try {
       const res = await onRetrainDataset(file);
-      setToastMsg(`✅ Retrained on ${res?.total_records || 'dataset'} records successfully!`);
-      setTimeout(() => setToastMsg(null), 4500);
+      setToastMsg(`✅ Retrained models on ${res?.total_records || 'dataset'} records successfully!`);
+      setTimeout(() => setToastMsg(null), 5000);
     } catch (err) {
-      setToastMsg(`❌ Retraining failed: ${err.message}`);
-      setTimeout(() => setToastMsg(null), 4500);
+      setToastMsg(`❌ Validation / Retraining error: ${err.message}`);
+      setTimeout(() => setToastMsg(null), 6000);
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleResetDatasetClick = async () => {
+    if (!onResetDataset) return;
+    try {
+      const res = await onResetDataset();
+      setToastMsg(`✅ Reset to baseline Alzheimer's dataset (${res?.total_records || '2149'} records)!`);
+      setTimeout(() => setToastMsg(null), 4000);
+    } catch (err) {
+      setToastMsg(`❌ Reset failed: ${err.message}`);
+      setTimeout(() => setToastMsg(null), 5000);
     }
   };
 
@@ -150,9 +149,11 @@ export default function DashboardView({
     }
   };
 
-  const cmANN = metricsData?.['ANN (MLP)']?.confusion_matrix || {
-    true_negative: 312, false_positive: 21, false_negative: 16, true_positive: 308
+  const activeBestModelName = bestModel && metricsData?.[bestModel] ? bestModel : (modelKeys[0] || 'ANN (MLP)');
+  const cmTarget = metricsData?.[activeBestModelName]?.confusion_matrix || {
+    true_negative: 0, false_positive: 0, false_negative: 0, true_positive: 0
   };
+
 
   return (
     <div className="animate-fade-in" style={{ padding: '32px 24px', maxWidth: '1440px', margin: '0 auto' }}>
@@ -196,9 +197,7 @@ export default function DashboardView({
             Data Analytics & Model Performance Results
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.98rem', maxWidth: '850px', lineHeight: 1.5 }}>
-            Comparison of Deep Learning <span style={{ color: '#818CF8', fontWeight: 600 }}>Artificial Neural Network (ANN MLP)</span> against 
-            Ensemble Classifiers (<span style={{ color: '#34D399', fontWeight: 600 }}>Gradient Boosting</span>, <span style={{ color: '#A78BFA', fontWeight: 600 }}>XGBoost</span>, <span style={{ color: '#60A5FA', fontWeight: 600 }}>SVM</span>, <span style={{ color: '#F472B6', fontWeight: 600 }}>Random Forest</span>, <span style={{ color: '#FBBF24', fontWeight: 600 }}>Decision Tree</span>) and 
-            Slow Learners (<span style={{ color: '#94A3B8', fontWeight: 600 }}>KNN</span>, <span style={{ color: '#94A3B8', fontWeight: 600 }}>Logistic Regression</span>).
+            Benchmarking 8 specialized Tabular Deep Learning architectures: <span style={{ color: '#818CF8', fontWeight: 600 }}>ANN / MLP</span>, <span style={{ color: '#A78BFA', fontWeight: 600 }}>1D-CNN</span>, <span style={{ color: '#EC4899', fontWeight: 600 }}>TabTransformer</span>, <span style={{ color: '#3B82F6', fontWeight: 600 }}>Deep Autoencoder</span>, <span style={{ color: '#10B981', fontWeight: 600 }}>Denoising Autoencoder</span>, <span style={{ color: '#F59E0B', fontWeight: 600 }}>Wide & Deep</span>, <span style={{ color: '#06B6D4', fontWeight: 600 }}>TabNet</span>, and <span style={{ color: '#F43F5E', fontWeight: 600 }}>DCN-V2</span> with native & Captum explainability.
           </p>
         </div>
 
@@ -240,33 +239,58 @@ export default function DashboardView({
                 Upload Custom Alzheimer's Dataset (.CSV / .XLSX)
               </h3>
               <p style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: '2px' }}>
-                Retrains all 8 models with live SMOTE resampling & metrics update
+                Retrains all 8 Deep Learning models with live SMOTE resampling & metrics update
               </p>
             </div>
           </div>
 
-          <label style={{ margin: 0 }}>
-            <input 
-              type="file" 
-              accept=".csv, .xlsx, .xls" 
-              style={{ display: 'none' }}
-              onChange={handleCustomDatasetUpload}
-              disabled={isRetraining}
-            />
-            <span className="btn-primary-gradient" style={{ padding: '10px 18px', fontSize: '0.88rem', cursor: isRetraining ? 'not-allowed' : 'pointer' }}>
-              {isRetraining ? (
-                <>
-                  <RefreshCw size={16} className="animate-spin" />
-                  <span>Training...</span>
-                </>
-              ) : (
-                <>
-                  <Upload size={16} />
-                  <span>Select File</span>
-                </>
-              )}
-            </span>
-          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {onResetDataset && (
+              <button
+                onClick={handleResetDatasetClick}
+                disabled={isRetraining}
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-muted)',
+                  borderRadius: '8px',
+                  padding: '10px 14px',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  cursor: isRetraining ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+                title="Reset to default bundled Alzheimer's dataset"
+              >
+                <RefreshCw size={14} className={isRetraining ? "animate-spin" : ""} />
+                <span>Reset</span>
+              </button>
+            )}
+            <label style={{ margin: 0 }}>
+              <input 
+                type="file" 
+                accept=".csv, .xlsx, .xls" 
+                style={{ display: 'none' }}
+                onChange={handleCustomDatasetUpload}
+                disabled={isRetraining}
+              />
+              <span className="btn-primary-gradient" style={{ padding: '10px 18px', fontSize: '0.88rem', cursor: isRetraining ? 'not-allowed' : 'pointer' }}>
+                {isRetraining ? (
+                  <>
+                    <RefreshCw size={16} className="animate-spin" />
+                    <span>Training...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload size={16} />
+                    <span>Select File</span>
+                  </>
+                )}
+              </span>
+            </label>
+          </div>
         </div>
 
         {/* Batch Test Data Card */}
@@ -466,6 +490,12 @@ export default function DashboardView({
         {modelCardsConfig.map((card, idx) => {
           const info = metricsData?.[card.name] || {};
           const set = smoteView === 'after' ? info.after_smote : info.before_smote;
+          const starsDisplay = info.stars_str || (
+            set?.recall >= 0.90 ? '⭐⭐⭐⭐⭐' :
+            set?.recall >= 0.80 ? '⭐⭐⭐⭐☆' :
+            set?.recall >= 0.70 ? '⭐⭐⭐☆☆' :
+            set?.recall >= 0.60 ? '⭐⭐☆☆☆' : '⭐☆☆☆☆'
+          );
           return (
             <div 
               key={idx} 
@@ -477,7 +507,7 @@ export default function DashboardView({
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#FFFFFF' }}>{card.name}</h4>
-                <span style={{ fontSize: '0.8rem' }}>{card.stars}</span>
+                <span style={{ fontSize: '0.8rem' }}>{starsDisplay}</span>
               </div>
               
               <div style={{ display: 'inline-block', fontSize: '0.72rem', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', marginBottom: '10px' }}>
@@ -520,7 +550,7 @@ export default function DashboardView({
                 </span>
               </div>
               <p style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: '2px' }}>
-                Metrics evaluated across all 8 models simultaneously
+                Metrics evaluated across all 8 Deep Learning architectures simultaneously
               </p>
             </div>
 
@@ -662,11 +692,13 @@ export default function DashboardView({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Raw Imbalanced Split (Original Dataset)</span>
-                <span style={{ fontWeight: 700, color: '#F87171' }}>20% Positive / 80% Negative</span>
+                <span style={{ color: 'var(--text-muted)' }}>Raw Imbalanced Split ({datasetInfo?.total_records || 'Original'} Records)</span>
+                <span style={{ fontWeight: 700, color: '#F87171' }}>
+                  {datasetInfo?.positive_pct_before ? `${datasetInfo.positive_pct_before}% Positive / ${(100 - datasetInfo.positive_pct_before).toFixed(1)}% Negative` : '20% Positive / 80% Negative'}
+                </span>
               </div>
               <div style={{ height: '8px', background: '#1E293B', borderRadius: '4px', overflow: 'hidden' }}>
-                <div style={{ width: '20%', height: '100%', background: '#EF4444' }}></div>
+                <div style={{ width: `${datasetInfo?.positive_pct_before || 20}%`, height: '100%', background: '#EF4444' }}></div>
               </div>
             </div>
 
@@ -685,24 +717,24 @@ export default function DashboardView({
         {/* Confusion Matrix Card */}
         <div className="glass-card" style={{ padding: '24px' }}>
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#FFFFFF', marginBottom: '16px' }}>
-            Confusion Matrix (ANN Primary Model)
+            Confusion Matrix ({activeBestModelName})
           </h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div style={{ background: '#0B101C', padding: '16px', borderRadius: '10px', textAlign: 'center', border: '1px solid rgba(16,185,129,0.3)' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>True Negative</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#34D399', marginTop: '4px' }}>{cmANN.true_negative}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#34D399', marginTop: '4px' }}>{cmTarget.true_negative}</div>
             </div>
             <div style={{ background: '#0B101C', padding: '16px', borderRadius: '10px', textAlign: 'center', border: '1px solid rgba(239,68,68,0.3)' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>False Positive</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#F87171', marginTop: '4px' }}>{cmANN.false_positive}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#F87171', marginTop: '4px' }}>{cmTarget.false_positive}</div>
             </div>
             <div style={{ background: '#0B101C', padding: '16px', borderRadius: '10px', textAlign: 'center', border: '1px solid rgba(239,68,68,0.3)' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>False Negative</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#F87171', marginTop: '4px' }}>{cmANN.false_negative}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#F87171', marginTop: '4px' }}>{cmTarget.false_negative}</div>
             </div>
             <div style={{ background: '#0B101C', padding: '16px', borderRadius: '10px', textAlign: 'center', border: '1px solid rgba(99,102,241,0.3)' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', textTransform: 'uppercase' }}>True Positive</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#818CF8', marginTop: '4px' }}>{cmANN.true_positive}</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#818CF8', marginTop: '4px' }}>{cmTarget.true_positive}</div>
             </div>
           </div>
         </div>

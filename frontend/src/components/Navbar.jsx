@@ -56,7 +56,7 @@ export default function Navbar({ activeTab, setActiveTab, appStatus = "ANN v2.4 
                 color: '#A5B4FC',
                 border: '1px solid rgba(99, 102, 241, 0.4)',
               }}>
-                ANN MLP
+                {appStatus ? appStatus.split(' · ')[0] : 'ML System'}
               </span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '2px' }}>

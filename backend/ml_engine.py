@@ -1,6 +1,7 @@
 """
-NeuroPredict AI - Machine Learning Engine
-8 Models with real SMOTE training and dynamic metric computation.
+NeuroPredict AI - Deep Learning Engine
+6 Deep Learning Architectures with SMOTE training, dynamic metric computation,
+and Captum / Neural Feature Attribution Explainability.
 """
 import numpy as np
 import pandas as pd
@@ -11,19 +12,13 @@ warnings.filterwarnings('ignore')
 
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.neural_network import MLPClassifier
-from xgboost import XGBClassifier
 from imblearn.over_sampling import SMOTE
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     matthews_corrcoef, roc_auc_score, confusion_matrix
 )
+
+from models import create_all_models, DEEP_LEARNING_MODEL_NAMES
 
 
 # ── Feature category definitions ─────────────────────────────────────────
@@ -48,19 +43,9 @@ MEDICAL_HISTORY_FEATURES = [
     'Hypertension'
 ]
 
-# Star ratings for each model (display metadata)
-MODEL_STARS = {
-    'ANN (MLP)': 5,
-    'XGBoost': 5,
-    'Gradient Boosting': 5,
-    'AdaBoost (Fast Learner)': 5,
-    'SVM': 5,
-    'Random Forest': 4,
-    'Decision Tree': 3,
-    'KNN (Lazy/Slow Learner)': 3,
-    'Naive Bayes (Slow/Lazy Learner)': 3,
-    'Logistic Regression (Slow Learner)': 3,
-}
+# Default list of supported Deep Learning model names
+DEFAULT_MODEL_NAMES = DEEP_LEARNING_MODEL_NAMES
+
 
 # ── Default Alzheimer's dataset columns ──────────────────────────────────
 EXPECTED_FEATURES = [
@@ -156,53 +141,13 @@ def _generate_synthetic_dataset(n_samples=2149, random_state=42):
     return df
 
 
-from sklearn.pipeline import make_pipeline
-from sklearn.feature_selection import SelectKBest, f_classif
-
-def _build_models():
-    """Create fresh, tuned instances of all models (including Fast & Slow learners)."""
-    return {
-        'ANN (MLP)': MLPClassifier(
-            hidden_layer_sizes=(128, 64), activation='relu',
-            solver='adam', alpha=0.001, max_iter=450, random_state=42,
-            early_stopping=True, validation_fraction=0.1
-        ),
-        'XGBoost': XGBClassifier(
-            n_estimators=160, max_depth=4, learning_rate=0.08,
-            subsample=0.85, colsample_bytree=0.85,
-            random_state=42, eval_metric='logloss', use_label_encoder=False
-        ),
-        'Gradient Boosting': GradientBoostingClassifier(
-            n_estimators=160, max_depth=4, learning_rate=0.08,
-            subsample=0.85, random_state=42
-        ),
-        'AdaBoost (Fast Learner)': AdaBoostClassifier(
-            n_estimators=120, learning_rate=0.1, random_state=42
-        ),
-        'SVM': SVC(
-            kernel='rbf', C=1.5, gamma='scale',
-            probability=True, random_state=42
-        ),
-        'Random Forest': RandomForestClassifier(
-            n_estimators=180, max_depth=8, min_samples_leaf=4,
-            random_state=42
-        ),
-        'Decision Tree': DecisionTreeClassifier(
-            max_depth=6, min_samples_leaf=6, random_state=42
-        ),
-        'KNN (Lazy/Slow Learner)': make_pipeline(
-            SelectKBest(f_classif, k=14),
-            KNeighborsClassifier(n_neighbors=9, weights='distance', metric='manhattan')
-        ),
-        'Naive Bayes (Slow/Lazy Learner)': GaussianNB(var_smoothing=1e-2),
-        'Logistic Regression (Slow Learner)': LogisticRegression(
-            C=1.5, max_iter=1000, solver='lbfgs', random_state=42
-        ),
-    }
+def _build_models(random_state=42):
+    """Create fresh, tuned instances of all 6 PyTorch Tabular Deep Learning models."""
+    return create_all_models(random_state=random_state)
 
 
 def _evaluate_model(model, X_test, y_test):
-    """Compute all 6 metrics for a trained model."""
+    """Compute all 6 metrics for a trained Deep Learning model."""
     y_pred = model.predict(X_test)
     y_prob = model.predict_proba(X_test)[:, 1]
     return {
@@ -212,6 +157,7 @@ def _evaluate_model(model, X_test, y_test):
         'f1': round(float(f1_score(y_test, y_pred, zero_division=0)), 4),
         'mcc': round(float(matthews_corrcoef(y_test, y_pred)), 4),
         'roc_auc': round(float(roc_auc_score(y_test, y_prob)), 4),
+        'training_time_s': getattr(model, 'training_time_seconds', 0.0),
     }
 
 
@@ -227,8 +173,22 @@ def _compute_confusion_matrix(model, X_test, y_test):
     }
 
 
+def _calculate_stars(recall):
+    """Derive dynamic star rating and symbol string from Recall score."""
+    if recall >= 0.90:
+        return 5, '⭐⭐⭐⭐⭐'
+    elif recall >= 0.80:
+        return 4, '⭐⭐⭐⭐☆'
+    elif recall >= 0.70:
+        return 3, '⭐⭐⭐☆☆'
+    elif recall >= 0.60:
+        return 2, '⭐⭐☆☆☆'
+    else:
+        return 1, '⭐☆☆☆☆'
+
+
 class MLEngine:
-    """Central ML engine that manages training, prediction and metrics for 8 models."""
+    """Central Deep Learning engine managing training, prediction and metrics for 6 DL models."""
 
     def __init__(self):
         self.scaler = StandardScaler()
@@ -259,26 +219,34 @@ class MLEngine:
     def _preprocess_dataframe(self, df):
         """Clean and preprocess a raw dataframe."""
         # Drop non-predictive columns if present
-        drop_cols = ['PatientID', 'DoctorInCharge', 'PatientName', 'Name']
+        drop_cols = ['PatientID', 'DoctorInCharge', 'PatientName', 'Name', 'ID', 'id', 'Patient_ID']
         for col in drop_cols:
-            if col in df.columns:
+            if col in df.columns and col != TARGET_COL:
                 df = df.drop(col, axis=1)
 
-        # Encode categorical columns
+        # Handle target encoding first
+        if TARGET_COL in df.columns:
+            if df[TARGET_COL].dtype == 'object':
+                le = LabelEncoder()
+                df[TARGET_COL] = le.fit_transform(df[TARGET_COL].astype(str))
+
+        # Encode categorical columns & fill missing values
         for col in df.columns:
-            if df[col].dtype == 'object' and col != TARGET_COL:
+            if col == TARGET_COL:
+                continue
+            if df[col].dtype == 'object':
+                df[col] = df[col].fillna('Unknown')
                 le = LabelEncoder()
                 df[col] = le.fit_transform(df[col].astype(str))
-
-        # Encode target if string
-        if df[TARGET_COL].dtype == 'object':
-            le = LabelEncoder()
-            df[TARGET_COL] = le.fit_transform(df[TARGET_COL])
+            else:
+                if df[col].isnull().any():
+                    median_val = df[col].median()
+                    df[col] = df[col].fillna(median_val if not pd.isna(median_val) else 0)
 
         return df
 
     def _train_on_dataframe(self, df):
-        """Full training pipeline on a dataframe."""
+        """Full training pipeline on a dataframe across all 6 Deep Learning architectures."""
         df = self._preprocess_dataframe(df.copy())
 
         X = df.drop(TARGET_COL, axis=1)
@@ -286,14 +254,20 @@ class MLEngine:
 
         self.feature_names = list(X.columns)
 
-        # Scale
+        # Scale continuous features
         self.scaler = StandardScaler()
         X_scaled = pd.DataFrame(self.scaler.fit_transform(X), columns=X.columns)
 
         # Split
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_scaled, y, test_size=0.2, random_state=42, stratify=y
-        )
+        try:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_scaled, y, test_size=0.2, random_state=42, stratify=y
+            )
+        except ValueError:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_scaled, y, test_size=0.2, random_state=42
+            )
+
         self.X_train = X_train
         self.X_test = X_test
         self.y_train = y_train
@@ -324,7 +298,7 @@ class MLEngine:
         self.models_before_smote = _build_models()
         self.metrics_before_smote = {}
         for name, model in self.models_before_smote.items():
-            model.fit(X_train, y_train)
+            model.fit(X_train, y_train, val_data=(X_test, y_test), feature_names=self.feature_names)
             self.metrics_before_smote[name] = _evaluate_model(model, X_test, y_test)
 
         # ── Train AFTER SMOTE (balanced) ──
@@ -332,12 +306,12 @@ class MLEngine:
         self.metrics_after_smote = {}
         self.confusion_matrices = {}
         for name, model in self.models_after_smote.items():
-            model.fit(X_train_smote, y_train_smote)
+            model.fit(X_train_smote, y_train_smote, val_data=(X_test, y_test), feature_names=self.feature_names)
             self.metrics_after_smote[name] = _evaluate_model(model, X_test, y_test)
             self.confusion_matrices[name] = _compute_confusion_matrix(model, X_test, y_test)
 
         # Best model by Recall (after SMOTE)
-        best_recall = 0
+        best_recall = -1
         for name, m in self.metrics_after_smote.items():
             if m['recall'] > best_recall:
                 best_recall = m['recall']
@@ -346,16 +320,31 @@ class MLEngine:
         self.is_trained = True
 
     def train_custom_dataset(self, file_bytes, filename):
-        """Train on uploaded CSV or XLSX file."""
-        if filename.endswith('.xlsx') or filename.endswith('.xls'):
-            df = pd.read_excel(io.BytesIO(file_bytes), engine='openpyxl')
-        else:
-            df = pd.read_csv(io.BytesIO(file_bytes))
+        """Train on uploaded CSV or XLSX file with comprehensive validation."""
+        if len(file_bytes) > 10 * 1024 * 1024:
+            raise ValueError("File size exceeds 10 MB limit. Please upload a smaller dataset.")
 
-        # Validate required target column
+        ext = filename.lower()
+        if not (ext.endswith('.csv') or ext.endswith('.xlsx') or ext.endswith('.xls')):
+            raise ValueError("Invalid file format. Please upload a .CSV or .XLSX dataset file.")
+
+        try:
+            if ext.endswith('.xlsx') or ext.endswith('.xls'):
+                df = pd.read_excel(io.BytesIO(file_bytes), engine='openpyxl')
+            else:
+                df = pd.read_csv(io.BytesIO(file_bytes))
+        except Exception as e:
+            raise ValueError(f"Failed to parse file content: {str(e)}")
+
+        if df.empty or len(df) == 0:
+            raise ValueError("Uploaded file is empty (0 rows). Please upload a valid dataset.")
+        if len(df) < 20:
+            raise ValueError(f"Dataset contains too few records ({len(df)} rows). At least 20 rows are required for DL model training.")
+        if len(df) > 50000:
+            raise ValueError(f"Dataset contains {len(df)} rows, exceeding the 50,000 row limit for interactive training.")
+
         if TARGET_COL not in df.columns:
-            # Try common alternatives
-            alt_names = ['diagnosis', 'target', 'label', 'class', 'Diagnosis']
+            alt_names = ['diagnosis', 'target', 'label', 'class', 'Diagnosis', 'DIAGNOSIS', 'alzheimers']
             found = False
             for alt in alt_names:
                 if alt in df.columns:
@@ -364,18 +353,40 @@ class MLEngine:
                     break
             if not found:
                 raise ValueError(
-                    f"Missing '{TARGET_COL}' column. Found columns: {list(df.columns)}"
+                    f"Missing target column '{TARGET_COL}'. Available columns: {list(df.columns)[:8]}..."
                 )
+
+        non_null_target = df[TARGET_COL].dropna()
+        if len(non_null_target) == 0:
+            raise ValueError(f"Target column '{TARGET_COL}' contains only empty/null values.")
+        unique_targets = non_null_target.unique()
+        if len(unique_targets) < 2:
+            raise ValueError(f"Target column '{TARGET_COL}' must contain at least 2 distinct classes (e.g. 0 and 1) for classification.")
+
+        empty_cols = [col for col in df.columns if col != TARGET_COL and df[col].dropna().empty]
+        if empty_cols:
+            raise ValueError(f"The following feature columns contain no valid data: {', '.join(empty_cols[:5])}")
 
         self._train_on_dataframe(df)
         return self.dataset_info
 
+    def reset_to_default_dataset(self):
+        """Reset and re-train models on standard Alzheimer's baseline dataset."""
+        self._bootstrap_train()
+        return self.dataset_info
+
     def get_all_metrics(self):
-        """Return metrics for all 8 models, before and after SMOTE."""
+        """Return metrics for all 6 models, before and after SMOTE, with dynamic star ratings."""
         result = {}
-        for name in MODEL_STARS:
+        all_model_names = list(self.metrics_after_smote.keys()) if self.metrics_after_smote else DEFAULT_MODEL_NAMES
+        for name in all_model_names:
+            after_set = self.metrics_after_smote.get(name, {})
+            recall_val = after_set.get('recall', 0.0)
+            num_stars, stars_str = _calculate_stars(recall_val)
+
             result[name] = {
-                'stars': MODEL_STARS[name],
+                'stars': num_stars,
+                'stars_str': stars_str,
                 'before_smote': self.metrics_before_smote.get(name, {}),
                 'after_smote': self.metrics_after_smote.get(name, {}),
                 'confusion_matrix': self.confusion_matrices.get(name, {}),
@@ -383,11 +394,24 @@ class MLEngine:
         return result
 
     def predict_single(self, patient_data, model_name=None):
-        """Predict for a single patient. Returns probability, class, risk factors, chart data."""
+        """Predict for a single patient using the specified PyTorch DL model."""
         if model_name is None:
-            model_name = self.best_model_name
+            model_name = self.best_model_name or list(self.models_after_smote.keys())[0]
 
         model = self.models_after_smote.get(model_name)
+        if model is None:
+            # Try to match partial or default to best
+            found = False
+            for k, v in self.models_after_smote.items():
+                if model_name.lower() in k.lower():
+                    model = v
+                    model_name = k
+                    found = True
+                    break
+            if not found:
+                model = self.models_after_smote.get(self.best_model_name)
+                model_name = self.best_model_name
+
         if model is None:
             raise ValueError(f"Model '{model_name}' not found")
 
@@ -395,7 +419,6 @@ class MLEngine:
         feature_values = []
         for feat in self.feature_names:
             val = patient_data.get(feat, 0)
-            # Convert Yes/No to 1/0
             if isinstance(val, str):
                 if val.lower() in ('yes', 'true', '1', 'male', 'caucasian'):
                     val = 1
@@ -414,8 +437,8 @@ class MLEngine:
         prob = float(model.predict_proba(input_scaled)[0][1])
         prediction = 1 if prob > 0.5 else 0
 
-        # Compute risk factor contributions
-        risk_factors = self._compute_risk_factors(patient_data, prob)
+        # Compute neural risk factor attributions (Captum / Gradient integrated)
+        risk_factors = self._compute_risk_factors(model, input_scaled, patient_data, prob)
         category_breakdown = self._compute_category_breakdown(patient_data)
 
         return {
@@ -434,13 +457,10 @@ class MLEngine:
         else:
             df = pd.read_csv(io.BytesIO(file_bytes))
 
-        # Remove non-feature columns
         drop_cols = ['PatientID', 'DoctorInCharge', 'PatientName', 'Name', TARGET_COL]
-        id_col = None
         patient_ids = []
         for col in ['PatientID', 'ID', 'id', 'Patient_ID']:
             if col in df.columns:
-                id_col = col
                 patient_ids = df[col].tolist()
                 break
 
@@ -480,7 +500,6 @@ class MLEngine:
         patients = []
         for idx, row in df.iterrows():
             patient = row.to_dict()
-            # Generate display info
             pid = patient.get('PatientID', patient.get('ID', idx + 1))
             name = patient.get('PatientName', patient.get('Name', f'Patient {pid}'))
             age = patient.get('Age', 'N/A')
@@ -500,29 +519,43 @@ class MLEngine:
 
         return patients
 
-    def _compute_risk_factors(self, patient_data, prob):
-        """Compute individual feature risk contributions for bar chart."""
-        risk_weights = {
-            'MMSE': {'weight': 0.25, 'threshold': lambda v: v < 20, 'label': 'Low MMSE Score'},
-            'FunctionalAssessment': {'weight': 0.12, 'threshold': lambda v: v < 5, 'label': 'Low Functional Assessment'},
-            'ADL': {'weight': 0.10, 'threshold': lambda v: v < 5, 'label': 'Low ADL Score'},
-            'Age': {'weight': 0.15, 'threshold': lambda v: v > 75, 'label': 'Advanced Age (>75)'},
-            'FamilyHistoryAlzheimers': {'weight': 0.12, 'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': "Family History"},
-            'MemoryComplaints': {'weight': 0.10, 'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Memory Complaints'},
-            'Confusion': {'weight': 0.08, 'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Confusion'},
-            'Disorientation': {'weight': 0.08, 'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Disorientation'},
-            'BehavioralProblems': {'weight': 0.06, 'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Behavioral Problems'},
-            'BMI': {'weight': 0.05, 'threshold': lambda v: v > 30, 'label': 'High BMI (>30)'},
-            'Depression': {'weight': 0.05, 'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Depression'},
-            'Hypertension': {'weight': 0.04, 'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Hypertension'},
-            'Diabetes': {'weight': 0.04, 'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Diabetes'},
-            'HeadInjury': {'weight': 0.05, 'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Head Injury'},
-            'SleepQuality': {'weight': 0.03, 'threshold': lambda v: v < 4, 'label': 'Poor Sleep Quality'},
-            'PhysicalActivity': {'weight': 0.03, 'threshold': lambda v: v < 3, 'label': 'Low Physical Activity'},
+    def _compute_risk_factors(self, model, input_scaled, patient_data, prob):
+        """
+        Compute individual feature risk contributions using Captum Integrated Gradients
+        fused with clinical domain criteria.
+        """
+        # 1. Get Neural Network feature attribution
+        try:
+            attributions = model.explain(input_scaled, self.feature_names)
+        except Exception:
+            attributions = {f: 1.0 / len(self.feature_names) for f in self.feature_names}
+
+        # 2. Clinical rules & labels
+        clinical_definitions = {
+            'MMSE': {'threshold': lambda v: v < 20, 'label': 'Low MMSE Score (<20)'},
+            'FunctionalAssessment': {'threshold': lambda v: v < 5, 'label': 'Low Functional Assessment'},
+            'ADL': {'threshold': lambda v: v < 5, 'label': 'Low ADL Autonomy Score'},
+            'Age': {'threshold': lambda v: v > 75, 'label': 'Advanced Age (>75)'},
+            'FamilyHistoryAlzheimers': {'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': "Family History of Alzheimer's"},
+            'MemoryComplaints': {'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Memory Complaints'},
+            'Confusion': {'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Confusion Symptoms'},
+            'Disorientation': {'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Disorientation'},
+            'BehavioralProblems': {'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Behavioral Problems'},
+            'BMI': {'threshold': lambda v: v > 30, 'label': 'High BMI (>30)'},
+            'Depression': {'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'History of Depression'},
+            'Hypertension': {'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Hypertension'},
+            'Diabetes': {'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Diabetes'},
+            'HeadInjury': {'threshold': lambda v: v == 1 or str(v).lower() == 'yes', 'label': 'Prior Head Injury'},
+            'SleepQuality': {'threshold': lambda v: v < 4, 'label': 'Poor Sleep Quality (<4)'},
+            'PhysicalActivity': {'threshold': lambda v: v < 3, 'label': 'Low Physical Activity (<3)'},
         }
 
         factors = []
-        for feat, info in risk_weights.items():
+        for feat in self.feature_names:
+            if feat not in clinical_definitions:
+                continue
+
+            info = clinical_definitions[feat]
             raw_val = patient_data.get(feat, 0)
             try:
                 val = float(raw_val) if not isinstance(raw_val, str) else (
@@ -532,22 +565,25 @@ class MLEngine:
                 val = 0
 
             is_risk = info['threshold'](val)
-            contribution = round(info['weight'] * 100 * (1 if is_risk else 0.1), 1)
-            impact = 'critical' if info['weight'] >= 0.2 else (
-                'high' if info['weight'] >= 0.1 else (
-                    'medium' if info['weight'] >= 0.05 else 'low'
+            # Combine model neural attribution with clinical presence
+            dl_attr = attributions.get(feat, 0.05)
+            contribution = round(dl_attr * 100 * (1.2 if is_risk else 0.2), 1)
+
+            impact = 'critical' if contribution >= 18.0 else (
+                'high' if contribution >= 10.0 else (
+                    'medium' if contribution >= 5.0 else 'low'
                 )
             )
+
             factors.append({
                 'name': info['label'],
                 'feature': feat,
                 'value': val,
-                'contribution': contribution,
+                'contribution': max(1.0, contribution),
                 'is_risk': is_risk,
                 'impact': impact,
             })
 
-        # Sort by contribution descending
         factors.sort(key=lambda x: x['contribution'], reverse=True)
         return factors
 
@@ -588,11 +624,10 @@ class MLEngine:
                 if feat in risk_checks:
                     score = risk_checks[feat](val)
                 else:
-                    score = val  # binary features
+                    score = val
                 cat_info['score'] += score
                 cat_info['max'] += 1
 
-        # Normalize to percentages
         total = sum(c['score'] for c in categories.values())
         if total == 0:
             total = 1

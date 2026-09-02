@@ -9,7 +9,29 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [metricsData, setMetricsData] = useState(null);
   const [datasetInfo, setDatasetInfo] = useState(null);
-  const [appStatus, setAppStatus] = useState('ANN v2.4 · Live');
+  const [appStatus, setAppStatus] = useState('Loading...');
+
+  // Reset Dataset to default
+  const handleResetDataset = async () => {
+    setIsRetraining(true);
+    try {
+      const res = await fetch('/api/dataset/reset', { method: 'POST' });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Reset failed');
+      }
+      const data = await res.json();
+      setMetricsData(data.metrics);
+      setDatasetInfo(data.dataset_info);
+      if (data.best_model) {
+        setAppStatus(`${data.best_model} · Live`);
+      }
+      return data.dataset_info;
+    } finally {
+      setIsRetraining(false);
+    }
+  };
+
   const [isRetraining, setIsRetraining] = useState(false);
   const [isPredicting, setIsPredicting] = useState(false);
   const [isStandaloneMobile, setIsStandaloneMobile] = useState(false);
@@ -134,7 +156,7 @@ export default function App() {
       setPredictionResult({
         prediction: score > 50 ? 1 : 0,
         probability: score,
-        model_used: 'ANN (MLP)',
+        model_used: 'ANN / MLP (Deep Neural Net)',
         risk_level: score > 50 ? 'High Risk' : 'Low Risk',
         patient_id: formData.id,
         risk_factors: [
@@ -244,8 +266,10 @@ export default function App() {
             datasetInfo={datasetInfo}
             onGoToIntake={() => setActiveTab('intake')}
             onRetrainDataset={handleRetrainDataset}
+            onResetDataset={handleResetDataset}
             onBatchPredict={handleBatchPredict}
             isRetraining={isRetraining}
+            bestModel={appStatus.split(' · ')[0]}
           />
         )}
 

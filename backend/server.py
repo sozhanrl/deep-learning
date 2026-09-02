@@ -1,6 +1,6 @@
 """
 NeuroPredict AI - FastAPI Backend Server
-REST API for 8-model Alzheimer's prediction system.
+REST API for Tabular Deep Learning Alzheimer's Prediction System (PyTorch + Captum).
 """
 import os
 import json
@@ -11,13 +11,13 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
-from ml_engine import MLEngine, MODEL_STARS
+from ml_engine import MLEngine
 
 # ── Initialize FastAPI ────────────────────────────────────────────────────
 app = FastAPI(
-    title="NeuroPredict AI API",
-    description="8-model Alzheimer's Disease Prediction System",
-    version="2.4.0",
+    title="NeuroPredict AI - Deep Learning API",
+    description="6 Tabular Deep Learning Models for Alzheimer's Prediction with Captum Explainability",
+    version="3.0.0",
 )
 
 app.add_middleware(
@@ -29,7 +29,7 @@ app.add_middleware(
 )
 
 # ── Initialize ML Engine (trains on startup) ─────────────────────────────
-print("[INIT] Initializing ML Engine -- training 8 models...")
+print("[INIT] Initializing ML Engine -- training models...")
 engine = MLEngine()
 print("[OK] ML Engine ready!")
 
@@ -50,7 +50,6 @@ async def health():
     return {
         "status": "online",
         "model_version": "ANN v2.4",
-        "models_count": 8,
         "is_trained": engine.is_trained,
         "best_model": engine.best_model_name,
     }
@@ -63,8 +62,25 @@ async def get_metrics():
         "metrics": engine.get_all_metrics(),
         "dataset_info": engine.dataset_info,
         "best_model": engine.best_model_name,
-        "model_stars": MODEL_STARS,
     }
+
+
+# ── Reset to Default Dataset ─────────────────────────────────────────────
+@app.post("/api/dataset/reset")
+async def reset_dataset():
+    try:
+        info = engine.reset_to_default_dataset()
+        return {
+            "status": "success",
+            "message": "Reset to original bundled Alzheimer's dataset",
+            "dataset_info": info,
+            "metrics": engine.get_all_metrics(),
+            "best_model": engine.best_model_name,
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Reset failed: {str(e)}")
+
 
 
 # ── Train on Custom Dataset ──────────────────────────────────────────────
@@ -159,7 +175,7 @@ async def parse_patients(file: UploadFile = File(...)):
 async def get_features():
     return {
         "features": engine.feature_names,
-        "model_names": list(MODEL_STARS.keys()),
+        "model_names": list(engine.get_all_metrics().keys()),
     }
 
 
