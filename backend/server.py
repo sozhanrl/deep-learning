@@ -16,7 +16,7 @@ from ml_engine import MLEngine
 # ── Initialize FastAPI ────────────────────────────────────────────────────
 app = FastAPI(
     title="NeuroPredict AI - Deep Learning API",
-    description="6 Tabular Deep Learning Models for Alzheimer's Prediction with Captum Explainability",
+    description="8 Tabular Deep Learning Models for Alzheimer's Prediction with Captum Explainability",
     version="3.0.0",
 )
 

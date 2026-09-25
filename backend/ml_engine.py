@@ -1,6 +1,6 @@
 """
 NeuroPredict AI - Deep Learning Engine
-6 Deep Learning Architectures with SMOTE training, dynamic metric computation,
+8 Deep Learning Architectures with SMOTE training, dynamic metric computation,
 and Captum / Neural Feature Attribution Explainability.
 """
 import numpy as np
@@ -246,7 +246,7 @@ class MLEngine:
         return df
 
     def _train_on_dataframe(self, df):
-        """Full training pipeline on a dataframe across all 6 Deep Learning architectures."""
+        """Full training pipeline on a dataframe across all 8 Deep Learning architectures."""
         df = self._preprocess_dataframe(df.copy())
 
         X = df.drop(TARGET_COL, axis=1)

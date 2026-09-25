@@ -1,6 +1,6 @@
 """
 Unit Tests for Deep Learning Model Layer in NeuroPredict AI.
-Verifies training, prediction, output shape, and explainability across all 6 architectures.
+Verifies training, prediction, output shape, and explainability across all 8 architectures.
 """
 import pytest
 import numpy as np
@@ -77,4 +77,4 @@ if __name__ == "__main__":
         assert len(expl) == len(EXPECTED_FEATURES)
         print(f"    [OK] Training time: {model.training_time_seconds}s, Sample prob: {probs[0][1]:.3f}")
 
-    print("\nAll 6 Deep Learning architectures verified successfully!")
+    print("\nAll 8 Deep Learning architectures verified successfully!")
