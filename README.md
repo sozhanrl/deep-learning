@@ -30,7 +30,7 @@
 - [🧪 Running Unit Tests](#-running-unit-tests)
 - [📁 Project Structure](#-project-structure)
 - [🛡️ Security & Privacy Considerations](#️-security--privacy-considerations)
-- [📄 License & Citation](#-license--citation)
+- [📄 License](#-license)
 
 ---
 
@@ -467,19 +467,9 @@ deep-learning/
 
 ---
 
-## 📄 License & Citation
+## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
-
-```bibtex
-@software{neuropredict_ai_2026,
-  author = {Hakkash & Contributors},
-  title = {NeuroPredict AI: Tabular Deep Learning & Explainable AI Suite for Alzheimer's Disease Detection},
-  year = {2026},
-  publisher = {GitHub},
-  url = {https://github.com/sozhanrl/deep-learning}
-}
-```
 
 ---
 
